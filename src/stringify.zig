@@ -31,14 +31,12 @@ pub fn stringify(value: anytype, out_stream: anytype) !void {
 
             // positive fixint stores 7-bit positive integer
             if (value >= 0 and value <= 0x7F) {
-                try out_stream.writeByte(@intCast(value));
-                return;
+                return out_stream.writeByte(@intCast(value));
             }
 
             // negative fixint stores 5-bit negative integer
             if (value >= -32 and value < 0) {
-                try out_stream.writeByte(@bitCast(@as(i8, @intCast(value))));
-                return;
+                return out_stream.writeByte(@bitCast(@as(i8, @intCast(value))));
             }
 
             const prefix = switch (T) {
@@ -66,13 +64,13 @@ pub fn stringify(value: anytype, out_stream: anytype) !void {
             }
 
             if (struct_info.fields.len < 16) {
-                const header: u8 = 0x80 | @as(u8, @intCast(value.len));
+                const header: u8 = 0x80 | @as(u8, @intCast(struct_info.fields.len));
                 try out_stream.writeByte(header);
             } else {
                 @panic("Struct with more than 15 fields is not yet supported.");
             }
 
-            for (struct_info.fields) |field| {
+            inline for (struct_info.fields) |field| {
                 try stringify(field.name, out_stream);
                 try stringify(@field(value, field.name), out_stream);
             }
@@ -170,6 +168,13 @@ test "stringify" {
     // String
     try expectPack("test", &.{ 0xA0 | 4, 't', 'e', 's', 't' });
     try expectPack("", &.{0xA0 | 0});
+
+    // Struct
+    const T = struct { a: i32, b: []const u8 };
+    try expectPack(
+        T{ .a = 1, .b = "xy" },
+        &.{ 0x80 | 2, 0xA0 | 1, 'a', 1, 0xA0 | 1, 'b', 0xA0 | 2, 'x', 'y' },
+    );
 }
 
 fn expectPack(value: anytype, expected: []const u8) !void {
